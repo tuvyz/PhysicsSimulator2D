@@ -1,0 +1,8 @@
+<RCC>
+    <qresource prefix="/new/prefix1">
+        <file>Shaders/shader.frag</file>
+        <file>Shaders/shader.vert</file>
+        <file>Images/ball.png</file>
+        <file>stylesheet.css</file>
+    </qresource>
+</RCC>
