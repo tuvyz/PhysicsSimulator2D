@@ -7,8 +7,8 @@
 #include <QOpenGLTexture>
 #include <QMessageBox>
 #include <QResource>
-#include "ffclasses.h"
 #include <global.h>
+#include <ffclasses.h>
 
 
 
@@ -28,9 +28,6 @@ struct Vec4 {
 
 
 
-typedef std::shared_ptr<ff::Image> ImageSP_t;
-
-
 
 #define GL_NAN 2111111111 // Условно неопределённое значение
 
@@ -39,7 +36,7 @@ typedef std::shared_ptr<ff::Image> ImageSP_t;
 // Накладываемая картинка
 struct OverlayImg {
     QString name; // По имени её потом можно будет удалить
-    ImageSP_t img;
+    GLuint textureId = GL_NAN; // Заполнять с помощью метода createTexture
     // Заполнять только один из двух:
     MyPoint posBox = MyPoint(GL_NAN, GL_NAN); // Привязывается к координатам рамки. Если число положительное, то отсчитывается
                                               // от нуля. Если отрицательное, то это число вычитается из ширины/длины виджета
@@ -125,6 +122,8 @@ struct OverlayText {
 
 
 
+
+
 class GLgraphics : public QOpenGLWidget, protected QOpenGLFunctions
 {
     Q_OBJECT
@@ -134,6 +133,26 @@ public:
 
     ~GLgraphics() override {
 
+    }
+
+    GLuint createTexture(const QImage &image); // Создаёт текстуру из изображения
+//    GLuint createTexture(const ff::Image &image) {
+//        GLuint textureID;
+//        glGenTextures(1, &textureID);
+//        glBindTexture(GL_TEXTURE_2D, textureID);
+//        glTexImage2D(GL_TEXTURE_2D, 0, image.channels == 4 ? GL_RGBA : GL_RGB,
+//                     image.width, image.height, 0,
+//                     image.channels == 4 ? GL_RGBA : GL_RGB,
+//                     GL_UNSIGNED_BYTE, image.data[0]);
+//        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+//        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+//        glBindTexture(GL_TEXTURE_2D, 0);
+//        return textureID;
+//    }
+
+
+    bool isInit() {
+        return isInitialize;
     }
 
 protected:
@@ -148,10 +167,8 @@ private:
 
     std::shared_ptr<QOpenGLTexture> frameTex;
 
-    QImage crossQImg;
-    ff::Image crossImg;
-
-    ImageSP_t framImg;
+    std::optional<GLuint> framImg;
+    MySize frameSize;
     std::recursive_mutex paintMtx;
 
     void setQuadsPoligon(GLint bl_x, GLint bl_y, GLint tp_x, GLint tp_y);
@@ -170,6 +187,8 @@ private:
     std::vector<OverlayText> overlayTexts;
 
     std::vector<int> availableLayers;
+
+    bool isInitialize = 0;
 
     bool visibleOverlays = 1;
 
@@ -203,9 +222,6 @@ private:
     bool isFillMode = 0;
     bool isFillModeInit = 0;
     MySize fillSize;
-    GLuint fbo;
-    GLuint backgroundTexture;
-    GLuint overlayTexture;
 
 
     bool isCenterViewEnable = 0;
@@ -215,7 +231,7 @@ public:
 
     virtual void reset();
 
-    void imgUpdate(ImageSP_t*);
+    void imgUpdate(GLuint, MySize);
 
     bool getIsUpdateGL() {
         return isUpdateGL;
@@ -230,6 +246,9 @@ public:
     void addOverlayLine(OverlayLine);
     void addOverlayTriangle(OverlayTriangle);
     void addOverlayText(OverlayText);
+
+    void addOverlayImg_Fast(OverlayImg); // Использовать только если важна скорость обработки. Не делает
+                                         // никаких проверок и работает только если слой всего один
 
     bool removeOverlayImg(QString name);
     bool removeOverlayLine(QString name);
@@ -253,10 +272,10 @@ public:
     }
 
     MySize getImgSize() {
-        if (framImg == nullptr) {
+        if (!framImg.has_value()) {
             return MySize(-1, -1);
         } else {
-            return MySize(framImg->width, framImg->height);
+            return frameSize;
         }
     }
 

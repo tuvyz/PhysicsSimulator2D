@@ -5,6 +5,7 @@ using namespace gl;
 
 
 
+
 GLgraphics::GLgraphics(QWidget *parent) : QOpenGLWidget(parent)
 {
 
@@ -12,18 +13,9 @@ GLgraphics::GLgraphics(QWidget *parent) : QOpenGLWidget(parent)
 
 
 
-
-
 void GLgraphics::initializeGL()
 {
     initializeOpenGLFunctions();
-
-    glGenTextures(1, &overlayTexture);
-    glBindTexture(GL_TEXTURE_2D, overlayTexture);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width(), height(), 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glBindTexture(GL_TEXTURE_2D, 0);
 
     if (!shPrOpacity) {
         shPrOpacity.reset(new QOpenGLShaderProgram);
@@ -50,8 +42,6 @@ void GLgraphics::initializeGL()
     frameTex->setMagnificationFilter(QOpenGLTexture::Linear);
     frameTex->create();
 
-    crossQImg = QImage(":/new/prefix1/Image/PointRed.png").convertToFormat(QImage::Format_RGBA8888);
-    this->crossImg = ff::Image(crossQImg.bits(), crossQImg.bytesPerLine(), crossQImg.height(), crossQImg.width(), AV_PIX_FMT_RGBA);
 
     connect(this, &GLgraphics::updateGL, this, [this](){
         isUpdateGL = 1;
@@ -63,6 +53,8 @@ void GLgraphics::initializeGL()
 
     connect(this, SIGNAL(initSignal()), this, SLOT(initSlot()));
     emit initSignal();
+
+    isInitialize = 1;
 }
 
 
@@ -77,10 +69,17 @@ void GLgraphics::initSlot() {
 
 
 
-
-
-
-
+// Создание текстуры
+GLuint GLgraphics::createTexture(const QImage &image) {
+    GLuint textureID;
+    glGenTextures(1, &textureID);
+    glBindTexture(GL_TEXTURE_2D, textureID);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, image.width(), image.height(), 0, GL_RGBA, GL_UNSIGNED_BYTE, image.bits());
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glBindTexture(GL_TEXTURE_2D, 0);
+    return textureID;
+}
 
 
 
@@ -106,10 +105,6 @@ void GLgraphics::resizeGL(int w, int h)
     glLoadIdentity(); // Заменяет текущую матрицу на единичную (?)
 
     glOrtho(0, w, 0, h, -1, 1); // Умножение текущей матрицы на ортогональную (по сути проекция в виде коробки)
-
-    glBindTexture(GL_TEXTURE_2D, overlayTexture);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
-    glBindTexture(GL_TEXTURE_2D, 0);
 
     isResizing++;
 }
@@ -157,10 +152,9 @@ void GLgraphics::paintGL()
     if (isFillMode == 1) {
         originalSize = fillSize;
     } else {
-        if (framImg == nullptr)
+        if (!framImg.has_value())
             return;
-        originalSize.height = framImg->height;
-        originalSize.width = framImg->width;
+        originalSize = frameSize;
     }
 
     double viewX1, viewX2, viewY1, viewY2;
@@ -261,18 +255,9 @@ void GLgraphics::paintGL()
 
     // Картинка
     if (!isFillMode) {
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, isSmoothing ? GL_LINEAR : GL_NEAREST);
-        glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, frameTex->textureId()); // Именует и создаёт текстурный объект для изображения текстуры
-        glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-        glTexImage2D(GL_TEXTURE_2D, 0, framImg->channels,
-                     framImg->width,
-                     framImg->height,
-                     0,
-                     framImg->channels == 4 ? GL_RGBA : GL_RGB,
-                     GL_UNSIGNED_BYTE,
-                     *framImg->data); // Карта текстуры
+        glBindTexture(GL_TEXTURE_2D, framImg.value());
         setQuadsPoligon(viewX1, viewY1, viewX2, viewY2);
+        glBindTexture(GL_TEXTURE_2D, 0);
     }
 
 
@@ -297,7 +282,6 @@ void GLgraphics::paintGL()
 
 
     // Наложения
-    glBindTexture(GL_TEXTURE_2D, overlayTexture);
     for (int curLayer : availableLayers) {
 
         // Наложение треугольников
@@ -373,12 +357,6 @@ void GLgraphics::paintGL()
                 // Преобразование размера и нулевой точки
                 MySize size = oImg.size;
                 MyPoint nullPoint = oImg.nullPoint;
-                if (size.width == GL_NAN) {
-                    size = MySize(oImg.img->width, oImg.img->height);
-                } else {
-                    nullPoint.x = oImg.nullPoint.x * size.width / oImg.img->width;
-                    nullPoint.y = oImg.nullPoint.y * size.height / oImg.img->height;
-                }
 
                 if (oImg.isScalable == 1) {
                     size.width *= currentZoom;
@@ -435,17 +413,21 @@ void GLgraphics::paintGL()
 
                 // Отрисовка происходит, если картинка в зоне видимости
                 if (rectangle) {
+
+                    // Расчёт прозрачности если изображение меньше 1 пикселя
+                    float opacity = oImg.opacity;
+                    double minSize = std::min(oImg.size.width * currentZoom, oImg.size.height * currentZoom);
+                    if (minSize < 1) {
+                        opacity *= minSize;
+                        x2 = qMax<double>(x1 + 1, x2);
+                        y2 = qMax<double>(y1 + 1, y2);
+                    }
+
                     shPrOpacity->setUniformValue("image", 0);
-                    shPrOpacity->setUniformValue("opacity", oImg.opacity);
-                    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, oImg.isSmoothing ? GL_LINEAR : GL_NEAREST);
-                    glTexImage2D(GL_TEXTURE_2D, 0, oImg.img->channels,
-                                 oImg.img->width,
-                                 oImg.img->height,
-                                 0,
-                                 oImg.img->channels == 4 ? GL_RGBA : GL_RGB,
-                                 GL_UNSIGNED_BYTE,
-                                 *oImg.img->data);
+                    shPrOpacity->setUniformValue("opacity", opacity);
+                    glBindTexture(GL_TEXTURE_2D, oImg.textureId);
                     setQuadsPoligon(x1, y1, x2, y2);
+                    glBindTexture(GL_TEXTURE_2D, 0);
                 }
 
                 shPrOpacity->release();
@@ -677,7 +659,7 @@ void GLgraphics::paintGL()
         }
 
     }
-    glBindTexture(GL_TEXTURE_2D, 0);
+
 
     if (isZooming)
         emit resizeSignal();
@@ -686,6 +668,7 @@ void GLgraphics::paintGL()
         emit resizeSignal();
     }
 
+    isUpdateGL = 0;
 }
 
 
@@ -696,23 +679,20 @@ void GLgraphics::paintGL()
 
 
 
-void GLgraphics::imgUpdate(ImageSP_t *image) {
-
+void GLgraphics::imgUpdate(GLuint tex, MySize imgSize) {
     std::unique_lock<std::recursive_mutex> un(paintMtx);
 
-    if (*image == nullptr)
-        return;
-
-    if (framImg == nullptr)
+    if (!framImg.has_value())
         isResizing = 1;
-    else
-        if (framImg->width != image->get()->width ||
-                framImg->height != image->get()->height)
-            isResizing = 1;
+    else if (frameSize.width != imgSize.width ||
+             frameSize.height != imgSize.height) {
+        glDeleteTextures(1, &framImg.value());
+        isResizing = 1;
+    }
 
-    this->framImg.reset();
-    this->framImg = *image;
+    frameSize = imgSize;
 
+    framImg = tex;
 }
 
 
@@ -721,7 +701,10 @@ void GLgraphics::imgUpdate(ImageSP_t *image) {
 
 
 
-
+void GLgraphics::addOverlayImg_Fast(OverlayImg oImg) {
+    overlayImgs.emplace_back(oImg);
+    sourceOverlayImgs.emplace_back(oImg);
+}
 
 void GLgraphics::addOverlayImg(OverlayImg oImg) {
 
@@ -771,7 +754,6 @@ void GLgraphics::addOverlayImg(OverlayImg oImg) {
             return v1.layer < v2.layer;
         });
     }
-
 }
 
 bool GLgraphics::removeOverlayImg(QString name) {
@@ -1120,7 +1102,7 @@ void GLgraphics::keyPressEvent(QKeyEvent *event) {
 
     std::unique_lock<std::recursive_mutex> un(paintMtx);
 
-    if (framImg == nullptr && isFillMode == 0)
+    if (!framImg.has_value() && isFillMode == 0)
         return;
 
     if (isWheelScale == 1) {
@@ -1145,7 +1127,7 @@ void GLgraphics::wheelEvent(QWheelEvent* event) {
 
     std::unique_lock<std::recursive_mutex> un(paintMtx);
 
-    if (framImg == nullptr && isFillMode == 0)
+    if (!framImg.has_value() && isFillMode == 0)
         return;
 
     if (isWheelScale == 1) {
@@ -1169,7 +1151,7 @@ void GLgraphics::mouseMoveEvent(QMouseEvent *event) {
 
     std::unique_lock<std::recursive_mutex> un(paintMtx);
 
-    if (framImg == nullptr && isFillMode == 0)
+    if (!framImg.has_value() && isFillMode == 0)
         return;
 
     setFocus();

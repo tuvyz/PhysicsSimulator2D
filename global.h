@@ -27,6 +27,8 @@ qint64 random(qint64 a, qint64 b);
 #define CHEKING_PROGRESS static int count = 0; qDebug() << count++;
 
 
+#define TIME1 MyTime debugTimer;
+#define TIME2 qDebug() << debugTimer;
 
 
 

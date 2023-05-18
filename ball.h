@@ -8,6 +8,11 @@
 class Ball {
 public:
 
+    Ball() {
+        currentCell.first = 0;
+        currentCell.second = 0;
+    }
+
     double x = 0, y = 0;
     double x_old = 0, y_old = 0; // Не заполнять
     double ax = 0, ay = 0; // Текущее ускорение
@@ -15,6 +20,8 @@ public:
     double restCoef = 1;
     bool isBlackHole = 0;
     bool isFixPos = 0;
+
+    std::pair<int, int> currentCell;
 
 
     // Поставить id

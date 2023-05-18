@@ -70,11 +70,9 @@ private:
     void drawObj(Ball &ball, QString modifier);
 
     PhysSim2D simulation;
-    gl::ImageSP_t imgBall;
-    gl::ImageSP_t backGround;
 
-    ulong BoundsX = 10000000;
-    ulong BoundsY = 10000000;
+    ulong BoundsX = 10000;
+    ulong BoundsY = 10000;
 
     bool isCreateObj = 0;
     Ball tempBall;
@@ -85,6 +83,7 @@ private:
     std::mutex sceneUpdateMtx;
 
     bool isFpsEnable = 1;
+    bool isObjSizeEnable = 1;
 
     long idOverCursor = 0;
 
@@ -109,6 +108,7 @@ private:
     float fpsSum = 0;
     int fpsIter = 0;
     int fps = 0;
+
 };
 
 

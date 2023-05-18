@@ -20,8 +20,6 @@ PhysSimWidget::PhysSimWidget(QWidget *parent) : GLgraphics(parent) {
 
     // Загружаем картинку шара
     QImage qBall = QImage(":/new/prefix1/Images/ball.png").convertToFormat(QImage::Format_RGBA8888);
-    imgBall = std::make_shared<ff::Image>(qBall.bits(), qBall.bytesPerLine(), qBall.height(), qBall.width(), AV_PIX_FMT_RGBA);
-
 
     // Наложение виджетов
     timeSld = new QSlider(Qt::Horizontal, this);
@@ -75,7 +73,7 @@ void PhysSimWidget::sceneUpdate() {
             continue;
         }
 
-        if (!getIsUpdateGL()) {
+        if (getIsUpdateGL()) {
             MyTime::sleep(100);
             continue;
         }
@@ -261,13 +259,27 @@ void PhysSimWidget::drawObjs() {
         oText.height = 14;
         addOverlayText(oText);
     }
+    if (isObjSizeEnable) {
+        gl::OverlayText oText;
+        oText.name = "Obj";
+        oText.text = "Obj: " + QString::number(simulation.getBallNumber());
+        oText.posBox = MyPoint(1, -17);
+        oText.nullPoint = MyPoint(0, 1);
+        oText.height = 14;
+        addOverlayText(oText);
+    }
 }
+
 void PhysSimWidget::drawObj(Ball &ball, QString modifier) {
     gl::OverlayImg overlay;
     overlay.name = QString("ball%1").arg(modifier);
-    overlay.img = imgBall;
+
+    static QImage qBall = QImage(":/new/prefix1/Images/ball.png").convertToFormat(QImage::Format_RGBA8888);
+    static GLuint ballTexture = createTexture(qBall);
+    overlay.textureId = ballTexture;
+
     overlay.posImage = MyPoint(ball.x - ball.getRadius(), ball.y - ball.getRadius());
     overlay.size = MySize(ball.getRadius() * 2, ball.getRadius() * 2);
     overlay.isSmoothing = 1;
-    addOverlayImg(overlay);
+    addOverlayImg_Fast(overlay);
 }
