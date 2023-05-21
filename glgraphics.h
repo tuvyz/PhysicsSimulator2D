@@ -136,19 +136,6 @@ public:
     }
 
     GLuint createTexture(const QImage &image); // Создаёт текстуру из изображения
-//    GLuint createTexture(const ff::Image &image) {
-//        GLuint textureID;
-//        glGenTextures(1, &textureID);
-//        glBindTexture(GL_TEXTURE_2D, textureID);
-//        glTexImage2D(GL_TEXTURE_2D, 0, image.channels == 4 ? GL_RGBA : GL_RGB,
-//                     image.width, image.height, 0,
-//                     image.channels == 4 ? GL_RGBA : GL_RGB,
-//                     GL_UNSIGNED_BYTE, image.data[0]);
-//        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-//        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-//        glBindTexture(GL_TEXTURE_2D, 0);
-//        return textureID;
-//    }
 
 
     bool isInit() {
